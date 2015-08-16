@@ -1,0 +1,120 @@
+---
+title: "Practical Machine Learning Project"
+author: "Tetyana"
+date: "15 августа 2015 г."
+output: html_document
+---
+
+#Download files
+
+```{r}
+#install.packages("caret")
+#install.packages("randomForest")
+#install.packages("rpart")
+#install.packages("rpart.plot")
+library("rpart")
+library("randomForest")
+
+
+url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(url, "pml-training.csv",method='curl')
+
+url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url, "pml-testing.csv",method='curl')
+
+```
+# Read,view and clean datasets
+
+```{r}
+# Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).
+# 
+# Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3isa6f0Ds
+
+training=read.csv("pml-training.csv",head=T, na.string=c("NA","#DIV/0!", ""))
+testing=read.csv("pml-testing.csv",head=T,na.string=c("NA","#DIV/0!", ""))
+
+# Delete columns with more than 20% missing values
+training<-training[ , apply(training , 2 , 
+                      function (x)  sum(is.na(x)) < 0.2 *nrow(training)) ]
+dim(training)
+
+testing<-testing[ , apply(testing , 2 ,
+               function (x)  sum(is.na(x)) < 0.2 *nrow(testing)) ]
+dim(testing)
+
+head(training)[1:10]
+head(testing)[1:10]
+
+# Columns 1-7 we can delete too
+training <-training[,-c(1:7)]
+testing  <-testing[,-c(1:7)]
+
+set.seed(848)
+# Random subsampling without replacement (60%)
+subsamples= sample(1:nrow(training),size=nrow(training)*0.6,replace=F)
+subTraining <- training[subsamples, ] 
+subTesting <- training[-subsamples, ]
+dim(subTraining)
+dim(subTesting)
+```
+# Frequency of levels (A, B, C, D, E) in the subTraining dataset for variable "classe"
+
+```{r}
+library("caret")
+
+summary(subTraining$classe)
+
+qplot(subTraining$classe, 
+        main="Levels of the variable classe")
+```
+
+#  Correlation Analysis
+```{r}
+correlation <- findCorrelation(cor(subTraining[, 1:ncol(subTraining)-1]), cutoff=0.8)
+names(subTraining)[correlation]
+```
+
+# Prediction model 1: Decision Tree
+
+```{r}
+library("rpart")
+model1 <- rpart(classe ~ ., 
+                subTraining, 
+                method="class")
+#model1
+
+predictions1<-predict(model1, subTesting,type ="class")
+cols=rainbow(5)
+library("rpart.plot")
+rpart.plot(model1, main="Decision Tree",box.col=cols, branch.col=cols)
+           
+confusionMatrix(predictions1, subTesting$classe)
+```
+
+# Prediction model 2: Random Forest 
+
+```{r}
+library("randomForest")
+model2<- randomForest(classe ~ ., 
+                      subTraining,
+                      method="class")
+model2
+predictions2<-predict(model2, subTesting,type="class")
+confusionMatrix(predictions2, subTesting$classe)
+```
+
+# Predictions for both models
+```{r}
+
+predict(model1, testing,type="class")
+predict(model2, testing,type="class")
+```
+
+# Decision about one of the two prediction model  
+
+Accuracy for Random Forest model - 0.9943 (95% CI : (0.9923, 0.9958)).
+
+Accuracy for Decision Tree model  - 0.7335 (95% CI: (0.7235, 0.7432)). 
+
+The Random Forests model is better. 
+
